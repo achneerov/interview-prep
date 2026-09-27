@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cue Cards</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: #f4f1eb;
+        color: #25231f;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      main {
+        width: min(680px, 100%);
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+
+      h1, h2, p { margin-top: 0; }
+      h1 { margin-bottom: 6px; font-size: clamp(2rem, 6vw, 3.3rem); letter-spacing: -0.05em; }
+      header p { margin-bottom: 0; color: #746e64; }
+
+      .progress {
+        width: 100%;
+        text-align: left;
+        color: #746e64;
+        font-size: 0.9rem;
+      }
+
+      .bar {
+        height: 7px;
+        margin-top: 8px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: #ddd7cc;
+      }
+
+      .bar span {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background: #3d6b58;
+        transition: width 180ms ease;
+      }
+
+      .card {
+        min-height: 330px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: clamp(24px, 6vw, 48px);
+        border: 1px solid #ded8ce;
+        border-radius: 24px;
+        background: #fffdf9;
+        box-shadow: 0 16px 45px #4c3f2d12;
+      }
+
+      .label {
+        margin-bottom: 28px;
+        color: #3d6b58;
+        font-size: 0.78rem;
+        font-weight: 750;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      .question {
+        margin-bottom: 24px;
+        font-size: clamp(1.55rem, 4vw, 2.3rem);
+        line-height: 1.18;
+        letter-spacing: -0.03em;
+      }
+
+      .answer {
+        margin: 0;
+        padding: 18px;
+        border-left: 4px solid #d4a14a;
+        border-radius: 8px;
+        background: #faf3e4;
+        line-height: 1.55;
+      }
+
+      .hidden { display: none; }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 18px;
+      }
+
+      button {
+        min-height: 52px;
+        padding: 12px 18px;
+        border: 0;
+        border-radius: 12px;
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        transition: transform 120ms ease, filter 120ms ease;
+      }
+
+      button:hover { filter: brightness(1.08); }
+      button:active { transform: translateY(1px); }
+      button:focus-visible { outline: 3px solid #d4a14a; outline-offset: 3px; }
+      .reveal { width: auto; padding-inline: 28px; background: #3d6b58; }
+      .again, .got-it { flex: 1; }
+      .again { background: #b35b43; }
+      .got-it { background: #3d6b58; }
+      .restart { margin-top: 18px; width: 100%; background: #867d70; }
+
+      .tip {
+        margin: 18px 0 0;
+        color: #746e64;
+        font-size: 0.9rem;
+        text-align: center;
+      }
+
+      .complete { text-align: center; }
+      .complete h2 { font-size: 2rem; }
+      .complete p { color: #746e64; line-height: 1.5; }
+
+      @media (max-width: 480px) {
+        header { display: block; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="progress">
+          <span id="progress-text"></span>
+          <div class="bar"><span id="progress-bar"></span></div>
+        </div>
+      </header>
+
+      <section class="card" id="card"></section>
+      <p class="tip">Right Arrow: show the answer or move on. X: mark unknown.</p>
+    </main>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // The source deck lives below as JSON. Add, remove, or edit cards here.
+        const cards = JSON.parse(document.getElementById("card-data").textContent);
+      let remaining = shuffle(cards);
+      let completed = 0;
+      let current = null;
+      let answerShown = false;
+
+      function shuffle(deck) {
+        const shuffled = [...deck];
+        for (let i = shuffled.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      }
+
+      function reinsertRandomly(card) {
+        const index = Math.floor(Math.random() * (remaining.length + 1));
+        remaining.splice(index, 0, card);
+      }
+
+      const cardElement = document.getElementById("card");
+      const progressText = document.getElementById("progress-text");
+      const progressBar = document.getElementById("progress-bar");
+
+      function drawCard() {
+        if (remaining.length === 0) {
+          cardElement.className = "card complete";
+          cardElement.innerHTML = "";
+          progressText.textContent = `${cards.length} / ${cards.length} learned`;
+          progressBar.style.width = "100%";
+          return;
+        }
+
+        current = remaining.shift();
+        answerShown = false;
+        cardElement.className = "card";
+        cardElement.innerHTML = `
+          <div>
+            <h2 class="question">${current.question}</h2>
+            <p class="answer hidden" id="answer">${current.answer}</p>
+          </div>
+        `;
+
+        progressText.textContent = `${completed} / ${cards.length} learned`;
+        progressBar.style.width = `${(completed / cards.length) * 100}%`;
+      }
+
+      function reveal() {
+        if (answerShown) return;
+        answerShown = true;
+        document.getElementById("answer").classList.remove("hidden");
+      }
+
+      function advance() {
+        completed += 1;
+        drawCard();
+      }
+
+      function markUnknown() {
+        if (!current) return;
+        reinsertRandomly(current);
+        drawCard();
+      }
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          if (answerShown) advance();
+          else reveal();
+        }
+        if (event.key.toLowerCase() === "x") markUnknown();
+      });
+
+        drawCard();
+      });
+    </script>
+
+    <script id="card-data" type="application/json">
+      [
+        {
+          "topic": "Object-oriented programming",
+          "question": "What are the four core ideas of OOP?",
+          "answer": "Encapsulation (bundle data and behavior), abstraction (hide unnecessary details), inheritance (derive a class from another), and polymorphism (one interface, different implementations)."
+        },
+        {
+          "topic": "OOP · Encapsulation",
+          "question": "What does encapsulation mean in OOP?",
+          "answer": "Keeping an object's state and the methods that operate on it together, while controlling direct access to that state."
+        },
+        {
+          "topic": "OOP · Abstraction",
+          "question": "What does abstraction mean in OOP?",
+          "answer": "Showing the essential interface of an object while hiding implementation details that the user of the object does not need to know."
+        },
+        {
+          "topic": "OOP · Inheritance",
+          "question": "What does inheritance mean in OOP?",
+          "answer": "Creating a new class that reuses or extends the data and behavior of an existing class."
+        },
+        {
+          "topic": "OOP · Polymorphism",
+          "question": "What does polymorphism mean in OOP?",
+          "answer": "Treating different object types through a shared interface, with each type providing its own implementation of the behavior."
+        },
+        {
+          "topic": "Design patterns · Factory",
+          "question": "What problem does the Factory pattern solve?",
+          "answer": "It centralizes object creation so calling code depends on an interface or base type rather than choosing concrete classes directly."
+        },
+        {
+          "topic": "Design patterns · Builder",
+          "question": "What problem does the Builder pattern solve?",
+          "answer": "It constructs a complex object step by step, especially when it has many optional parts or configurations."
+        },
+        {
+          "topic": "Design patterns · Singleton",
+          "question": "What problem does the Singleton pattern solve?",
+          "answer": "It restricts a class to one shared instance and provides a common access point to it. Use it cautiously because global shared state can make code harder to test."
+        },
+        {
+          "topic": "Design patterns · Facade",
+          "question": "What problem does the Facade pattern solve?",
+          "answer": "It provides a simple interface over a more complicated subsystem, hiding the subsystem's internal coordination."
+        },
+        {
+          "topic": "Design patterns · Adapter",
+          "question": "What problem does the Adapter pattern solve?",
+          "answer": "It lets incompatible interfaces work together by translating the interface one class exposes into the interface the client expects."
+        },
+        {
+          "topic": "Design patterns · Strategy",
+          "question": "What problem does the Strategy pattern solve?",
+          "answer": "It puts interchangeable algorithms behind a common interface so the algorithm can vary without changing the client."
+        },
+        {
+          "topic": "Design patterns · Observer",
+          "question": "What problem does the Observer pattern solve?",
+          "answer": "It lets one subject notify multiple dependent observers when its state changes, without tightly coupling the subject to each observer."
+        }
+      ]
+    </script>
+  </body>
+</html>
